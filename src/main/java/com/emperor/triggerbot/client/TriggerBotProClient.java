@@ -40,7 +40,6 @@ public final class TriggerBotProClient implements ClientModInitializer {
     private static Entity lastTarget;
     private static int hitCount;
     private static boolean critWindowOpen;
-    private static boolean singleplayerLocked;
 
     @Override
     public void onInitializeClient() {
@@ -68,11 +67,7 @@ public final class TriggerBotProClient implements ClientModInitializer {
 
         currentTarget = null;
         critWindowOpen = false;
-        singleplayerLocked = false;
         if (client.player == null || client.world == null || client.interactionManager == null) return;
-
-        // Sadece tek oyunculu dünyada çalışır (LAN'a açılmış dünya da kilitli sayılır).
-        if (!client.isInSingleplayer()) { singleplayerLocked = true; resetState(); return; }
 
         if (!CONFIG.enabled || (CONFIG.requireAttackKey && !client.options.attackKey.isPressed())) { resetState(); return; }
         if (client.currentScreen != null) { resetState(); return; }
@@ -160,10 +155,6 @@ public final class TriggerBotProClient implements ClientModInitializer {
         return false;
     }
 
-    /**
-     * Minecraft'ın kritik vuruş koşulları: düşüyor olmak (zıpladıktan sonra tepeyi geçmiş),
-     * yerde/tırmanırken/suda/araçta/körlükte olmamak ve KOŞMAMAK. Koşarken vurursan kritik olmaz.
-     */
     private static boolean isCriticalWindow(PlayerEntity player) {
         return player.fallDistance > 0.0f
                 && player.getVelocity().y < 0.0
@@ -176,7 +167,6 @@ public final class TriggerBotProClient implements ClientModInitializer {
                 && !player.getAbilities().flying;
     }
 
-    /** Havada, yükselme fazında ve kritik koşulları dışında bir şey engellemiyorsa true. */
     private static boolean isRisingInAir(PlayerEntity player) {
         return !player.isOnGround()
                 && player.getVelocity().y > 0.0
@@ -225,8 +215,8 @@ public final class TriggerBotProClient implements ClientModInitializer {
         int y = 8;
         int width = 200;
         int height = CONFIG.hudShowTarget ? 78 : (CONFIG.hudShowCps ? 38 : 24);
-        int stateColor = singleplayerLocked ? 0xFFF59E0B : (CONFIG.enabled ? 0xFF4ADE80 : 0xFFEF4444);
-        String state = singleplayerLocked ? "KİLİTLİ" : (CONFIG.enabled ? "AKTİF" : "PASİF");
+        int stateColor = CONFIG.enabled ? 0xFF4ADE80 : 0xFFEF4444;
+        String state = CONFIG.enabled ? "AKTİF" : "PASİF";
         ctx.fill(x, y, x + width, y + height, 0xCC101419);
         ctx.fill(x, y, x + 3, y + height, stateColor);
         ctx.drawText(client.textRenderer, "TriggerBot Pro", x + 10, y + 5, 0xFFFFFFFF, true);
@@ -244,20 +234,18 @@ public final class TriggerBotProClient implements ClientModInitializer {
             }
             if (CONFIG.hudShowCps) ctx.drawText(client.textRenderer, cpsText, x + 106, y + 33, cpsColor, true);
 
-            String profile = singleplayerLocked ? "Sadece tek oyunculuda çalışır" : "Profil: " + CONFIG.presetLabel();
+            String profile = "Profil: " + CONFIG.presetLabel();
             ctx.drawText(client.textRenderer, profile, x + 10, y + 46, 0xFF9CA3AF, false);
             ctx.drawText(client.textRenderer, "Vuruş: " + hitCount, x + 140, y + 46, 0xFF9CA3AF, false);
 
-            if (!singleplayerLocked) {
-                ctx.drawText(client.textRenderer, CONFIG.cpsMode ? "Mod: CPS" : "Mod: Bekleme", x + 10, y + 59, 0xFF9CA3AF, false);
-                if (CONFIG.humanize) ctx.drawText(client.textRenderer, "İnsan", x + 90, y + 59, 0xFF9CA3AF, false);
-                if (CONFIG.criticalOnly) {
-                    ctx.drawText(client.textRenderer, critWindowOpen ? "KRİTİK" : "bekle", x + 140, y + 59,
-                            critWindowOpen ? 0xFF4ADE80 : 0xFF6B7280, true);
-                }
+            ctx.drawText(client.textRenderer, CONFIG.cpsMode ? "Mod: CPS" : "Mod: Bekleme", x + 10, y + 59, 0xFF9CA3AF, false);
+            if (CONFIG.humanize) ctx.drawText(client.textRenderer, "İnsan", x + 90, y + 59, 0xFF9CA3AF, false);
+            if (CONFIG.criticalOnly) {
+                ctx.drawText(client.textRenderer, critWindowOpen ? "KRİTİK" : "bekle", x + 140, y + 59,
+                        critWindowOpen ? 0xFF4ADE80 : 0xFF6B7280, true);
             }
         } else if (CONFIG.hudShowCps) {
-            String profile = singleplayerLocked ? "Tek oyunculu" : CONFIG.presetLabel();
+            String profile = CONFIG.presetLabel();
             ctx.drawText(client.textRenderer, profile, x + 10, y + 20, 0xFF9CA3AF, false);
             ctx.drawText(client.textRenderer, cpsText, x + 106, y + 20, cpsColor, true);
         }
