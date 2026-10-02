@@ -9,17 +9,17 @@ import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
+import net.minecraft.client.gui.DrawContext;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.mob.HostileEntity;
-import net.minecraft.entity.passive.PassiveEntity;
 import net.minecraft.entity.mob.MobEntity;
+import net.minecraft.entity.passive.PassiveEntity;
 import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.entity.player.PlayerAbilities;
-import net.minecraft.entity.projectile.ProjectileUtil;
+import net.minecraft.item.AxeItem;
+import net.minecraft.item.SwordItem;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.EntityHitResult;
-import net.minecraft.util.hit.HitResult;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.concurrent.ThreadLocalRandom;
@@ -27,34 +27,52 @@ import java.util.concurrent.ThreadLocalRandom;
 public final class TriggerBotProClient implements ClientModInitializer {
     public static TriggerConfig CONFIG;
     private static KeyBinding openKey;
+    private static KeyBinding toggleKey;
     private static long reactionAt;
     private static long nextAttackAt;
     private static boolean pending;
+    private static Entity currentTarget;
+    private static int hitCount;
 
-    @Override public void onInitializeClient() {
-        CONFIG = TriggerConfig.load(MinecraftClient.getInstance().runDirectory.toPath().resolve("config"));
-        openKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.triggerbotpro.open", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_RIGHT_SHIFT, "TriggerBot Pro"));
+    @Override
+    public void onInitializeClient() {
+        MinecraftClient client = MinecraftClient.getInstance();
+        CONFIG = TriggerConfig.load(client.runDirectory.toPath().resolve("config"));
+
+        openKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.triggerbotpro.open", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_RIGHT_SHIFT,
+                "key.categories.triggerbotpro"));
+        toggleKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.triggerbotpro.toggle", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_G,
+                "key.categories.triggerbotpro"));
+
         ClientTickEvents.END_CLIENT_TICK.register(TriggerBotProClient::tick);
-        HudRenderCallback.EVENT.register((drawContext, tickDelta) -> renderHud(drawContext));
+        HudRenderCallback.EVENT.register((drawContext, tickCounter) -> renderHud(drawContext));
     }
 
     private static void tick(MinecraftClient client) {
         while (openKey.wasPressed()) client.setScreen(new TriggerConfigScreen(client.currentScreen));
-        if (client.player == null || client.world == null || client.interactionManager == null) return;
-        if (!client.isInSingleplayer() || client.getServer() == null) { pending = false; return; }
-        if (!CONFIG.enabled || (CONFIG.requireAttackKey && !client.options.attackKey.isPressed())) { pending = false; return; }
-        if (client.currentScreen != null) { pending = false; return; }
+        while (toggleKey.wasPressed()) toggle();
 
-        Entity target = getCrosshairTarget(client);
-        if (!validTarget(client, target)) { pending = false; return; }
+        currentTarget = null;
+        if (client.player == null || client.world == null || client.interactionManager == null) return;
+
+        if (!CONFIG.enabled || (CONFIG.requireAttackKey && !client.options.attackKey.isPressed())) { resetState(); return; }
+        if (client.currentScreen != null) { resetState(); return; }
+        if (CONFIG.pauseWhileUsingItem && client.player.isUsingItem()) { resetState(); return; }
+        if (!CONFIG.allowSprintAttack && client.player.isSprinting()) { resetState(); return; }
+        if (CONFIG.weaponOnly && !isWeapon(client.player)) { resetState(); return; }
+
+        Entity target = client.crosshairTarget instanceof EntityHitResult hit ? hit.getEntity() : null;
+        if (!validTarget(client, target)) { resetState(); return; }
+        currentTarget = target;
+
         if (CONFIG.attackOnlyIfCooldownReady && client.player.getAttackCooldownProgress(0.0f) < 1.0f) return;
         if (CONFIG.criticalOnly && !isCriticalWindow(client.player)) return;
 
-        long now = System.nanoTime() / 1_000_000L;
+        long now = System.currentTimeMillis();
         if (!pending) {
-            int delay = CONFIG.randomizeReaction
-                    ? ThreadLocalRandom.current().nextInt(Math.max(0, CONFIG.reactionMinMs), Math.max(CONFIG.reactionMinMs + 1, CONFIG.reactionMaxMs + 1))
-                    : CONFIG.reactionMinMs;
+            int delay = randomReaction();
             reactionAt = now + delay;
             pending = true;
         }
@@ -62,15 +80,26 @@ public final class TriggerBotProClient implements ClientModInitializer {
 
         client.interactionManager.attackEntity(client.player, target);
         if (CONFIG.swingHand) client.player.swingHand(Hand.MAIN_HAND);
-        double cps = Math.max(1.0, Math.min(CONFIG.maxCps, CONFIG.minCps));
-        if (CONFIG.maxCps > CONFIG.minCps) cps = ThreadLocalRandom.current().nextDouble(CONFIG.minCps, CONFIG.maxCps);
-        nextAttackAt = now + (long)(1000.0 / cps);
+        hitCount++;
+
+        double cps = ThreadLocalRandom.current().nextDouble(CONFIG.minCps, CONFIG.maxCps + 0.0001);
+        long interval = Math.max(50L, (long) (1000.0 / cps));
+        if (CONFIG.jitterMs > 0) {
+            interval += ThreadLocalRandom.current().nextLong(-CONFIG.jitterMs, CONFIG.jitterMs + 1);
+            interval = Math.max(50L, interval);
+        }
+        nextAttackAt = now + interval;
         pending = false;
     }
 
-    private static Entity getCrosshairTarget(MinecraftClient client) {
-        if (client.crosshairTarget instanceof EntityHitResult hit) return hit.getEntity();
-        return null;
+    private static int randomReaction() {
+        if (!CONFIG.randomizeReaction || CONFIG.reactionMaxMs <= CONFIG.reactionMinMs) return CONFIG.reactionMinMs;
+        return ThreadLocalRandom.current().nextInt(CONFIG.reactionMinMs, CONFIG.reactionMaxMs + 1);
+    }
+
+    private static boolean isWeapon(PlayerEntity player) {
+        var item = player.getMainHandStack().getItem();
+        return item instanceof SwordItem || item instanceof AxeItem;
     }
 
     private static boolean validTarget(MinecraftClient client, Entity entity) {
@@ -81,10 +110,10 @@ public final class TriggerBotProClient implements ClientModInitializer {
         if (CONFIG.ignoreInvisible && living.isInvisible()) return false;
         if (self.distanceTo(entity) > CONFIG.maxRange) return false;
         if (CONFIG.requireLineOfSight && !self.canSee(entity)) return false;
+
         if (entity instanceof PlayerEntity p) {
             if (!CONFIG.players) return false;
-            if (CONFIG.ignoreCreativePlayers && p.isCreative()) return false;
-            return true;
+            return !CONFIG.ignoreCreativePlayers || !p.isCreative();
         }
         if (entity instanceof HostileEntity) return CONFIG.hostile;
         if (entity instanceof PassiveEntity) return CONFIG.passive;
@@ -92,14 +121,50 @@ public final class TriggerBotProClient implements ClientModInitializer {
         return false;
     }
 
-    private static boolean isCriticalWindow(PlayerEntity p) {
-        return p.fallDistance > 0.0f && !p.isOnGround() && !p.isClimbing() && !p.isTouchingWater() && !p.hasVehicle();
+    private static boolean isCriticalWindow(PlayerEntity player) {
+        return player.fallDistance > 0.0f
+                && !player.isOnGround()
+                && !player.isClimbing()
+                && !player.isTouchingWater()
+                && !player.hasVehicle();
     }
 
-    private static void renderHud(net.minecraft.client.gui.DrawContext ctx) {
+    private static void resetState() {
+        pending = false;
+        reactionAt = 0;
+    }
+
+    private static void toggle() {
+        CONFIG.enabled = !CONFIG.enabled;
+        resetState();
+        CONFIG.save();
+    }
+
+    public static Entity getCurrentTarget() { return currentTarget; }
+    public static int getHitCount() { return hitCount; }
+
+    private static void renderHud(DrawContext ctx) {
         MinecraftClient client = MinecraftClient.getInstance();
-        if (client.player == null || client.currentScreen != null || !client.isInSingleplayer()) return;
-        String status = CONFIG.enabled ? "TriggerBot Pro: ON" : "TriggerBot Pro: OFF";
-        ctx.drawText(client.textRenderer, status, 8, 8, CONFIG.enabled ? 0x55FF55 : 0xFF5555, true);
+        if (!CONFIG.hudEnabled || client.player == null || client.currentScreen != null) return;
+
+        int x = 8;
+        int y = 8;
+        int width = 190;
+        int height = (CONFIG.hudShowTarget ? 56 : 24);
+        ctx.fill(x, y, x + width, y + height, 0xCC101419);
+        ctx.fill(x, y, x + 3, y + height, CONFIG.enabled ? 0xFF4ADE80 : 0xFFEF4444);
+        ctx.drawText(client.textRenderer, "TriggerBot Pro", x + 10, y + 5, 0xFFFFFFFF, true);
+        ctx.drawText(client.textRenderer, CONFIG.enabled ? "AKTİF" : "PASİF", x + 118, y + 5,
+                CONFIG.enabled ? 0xFF4ADE80 : 0xFFEF4444, true);
+
+        if (CONFIG.hudShowTarget) {
+            String target = currentTarget == null ? "Hedef: —" : "Hedef: " + currentTarget.getDisplayName().getString();
+            ctx.drawText(client.textRenderer, target, x + 10, y + 20, 0xFFD1D5DB, false);
+            if (CONFIG.hudShowRange) {
+                String distance = currentTarget == null ? "Mesafe: —" : String.format(java.util.Locale.US, "Mesafe: %.1fm", client.player.distanceTo(currentTarget));
+                ctx.drawText(client.textRenderer, distance, x + 10, y + 35, 0xFF9CA3AF, false);
+            }
+            ctx.drawText(client.textRenderer, "Vuruş: " + hitCount, x + 106, y + 35, 0xFF9CA3AF, false);
+        }
     }
 }

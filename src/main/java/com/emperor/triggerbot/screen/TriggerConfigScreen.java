@@ -5,79 +5,194 @@ import com.emperor.triggerbot.config.TriggerConfig;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
+import net.minecraft.client.gui.widget.SliderWidget;
 import net.minecraft.text.Text;
 
 public final class TriggerConfigScreen extends Screen {
     private final Screen parent;
-    private int page = 0;
-    private int row = 0;
-    private int presetIndex = 1;
+    private int tab = 0;
+    private final String[] tabs = {"GENEL", "HEDEFLER", "ZAMANLAMA", "GÖRÜNÜM"};
+    private TriggerConfig c;
 
-    public TriggerConfigScreen(Screen parent) { super(Text.literal("TriggerBot Pro")); this.parent = parent; }
+    public TriggerConfigScreen(Screen parent) {
+        super(Text.literal("TriggerBot Pro"));
+        this.parent = parent;
+    }
 
-    @Override protected void init() { rebuild(); }
+    @Override protected void init() {
+        c = TriggerBotProClient.CONFIG;
+        rebuild();
+    }
 
     private void rebuild() {
-        clearChildren(); row = 0;
-        if (page == 0) buildMain(); else if (page == 1) buildTargets(); else buildTiming();
-        addDrawableChild(ButtonWidget.builder(Text.literal("← Back"), b -> { if (page == 0) close(); else { page--; rebuild(); } }).dimensions(width/2-150, height-35, 90, 22).build());
-        if (page < 2) addDrawableChild(ButtonWidget.builder(Text.literal("Next →"), b -> { page++; rebuild(); }).dimensions(width/2+60, height-35, 90, 22).build());
-        addDrawableChild(ButtonWidget.builder(Text.literal("Save"), b -> { TriggerBotProClient.CONFIG.save(); close(); }).dimensions(width/2-45, height-35, 90, 22).build());
+        clearChildren();
+        int cx = width / 2;
+        int panelLeft = cx - 210;
+        int panelTop = 42;
+        for (int i = 0; i < tabs.length; i++) {
+            final int tabIndex = i;
+            addDrawableChild(ButtonWidget.builder(Text.literal(tabs[i]), b -> { tab = tabIndex; rebuild(); })
+                    .dimensions(panelLeft + i * 105, 18, 100, 20).build());
+        }
+
+        switch (tab) {
+            case 0 -> buildGeneral(panelLeft + 14, panelTop);
+            case 1 -> buildTargets(panelLeft + 14, panelTop);
+            case 2 -> buildTiming(panelLeft + 14, panelTop);
+            case 3 -> buildVisual(panelLeft + 14, panelTop);
+        }
+
+        addDrawableChild(ButtonWidget.builder(Text.literal("VARSAYILANLARA DÖN"), b -> {
+            c.reset(); rebuild();
+        }).dimensions(panelLeft, height - 32, 145, 22).build());
+        addDrawableChild(ButtonWidget.builder(Text.literal("KAYDET & ÇIK"), b -> saveAndClose())
+                .dimensions(panelLeft + 155, height - 32, 145, 22).build());
     }
 
-    private int y() { return 55 + row++ * 28; }
-    private void addToggle(String name, java.util.function.BooleanSupplier get, java.util.function.Consumer<Boolean> set) {
-        int y=y(); addDrawableChild(ButtonWidget.builder(Text.literal(name + ": " + (get.getAsBoolean()?"ON":"OFF")), b -> { set.accept(!get.getAsBoolean()); rebuild(); }).dimensions(width/2-155,y,310,22).build());
-    }
-    private void addCycle(String name, String[] values, java.util.function.IntSupplier get, java.util.function.IntConsumer set) {
-        int y=y(); addDrawableChild(ButtonWidget.builder(Text.literal(name + ": " + values[get.getAsInt()]), b -> { set.accept((get.getAsInt()+1)%values.length); rebuild(); }).dimensions(width/2-155,y,310,22).build());
+    private void buildGeneral(int x, int y) {
+        toggle(x, y, "TriggerBot", c.enabled, v -> c.enabled = v);
+        toggle(x + 198, y, "Sadece saldırı tuşu", c.requireAttackKey, v -> c.requireAttackKey = v);
+        toggle(x, y + 30, "Eşya kullanırken dur", c.pauseWhileUsingItem, v -> c.pauseWhileUsingItem = v);
+        toggle(x + 198, y + 30, "Sadece kılıç / balta", c.weaponOnly, v -> c.weaponOnly = v);
+        toggle(x, y + 60, "Saldırı bekleme süresi", c.attackOnlyIfCooldownReady, v -> c.attackOnlyIfCooldownReady = v);
+        toggle(x + 198, y + 60, "Sprintte saldır", c.allowSprintAttack, v -> c.allowSprintAttack = v);
+        toggle(x, y + 90, "Kritik vuruş modu", c.criticalOnly, v -> c.criticalOnly = v);
+        toggle(x + 198, y + 90, "El sallama animasyonu", c.swingHand, v -> c.swingHand = v);
+
+        addDrawableChild(ButtonWidget.builder(Text.literal("Preset: Yumuşak"), b -> { c.applyPreset(TriggerConfig.Preset.YUMUSAK); rebuild(); })
+                .dimensions(x, y + 138, 140, 24).build());
+        addDrawableChild(ButtonWidget.builder(Text.literal("Preset: Dengeli"), b -> { c.applyPreset(TriggerConfig.Preset.DENGELI); rebuild(); })
+                .dimensions(x + 150, y + 138, 140, 24).build());
+        addDrawableChild(ButtonWidget.builder(Text.literal("Preset: Hızlı"), b -> { c.applyPreset(TriggerConfig.Preset.HIZLI); rebuild(); })
+                .dimensions(x, y + 168, 140, 24).build());
+        addDrawableChild(ButtonWidget.builder(Text.literal("Preset: Kritik"), b -> { c.applyPreset(TriggerConfig.Preset.KRITIK); rebuild(); })
+                .dimensions(x + 150, y + 168, 140, 24).build());
     }
 
-    private void buildMain() {
-        TriggerConfig c=TriggerBotProClient.CONFIG;
-        addToggle("Enabled", ()->c.enabled, v->c.enabled=v);
-        addToggle("Require attack key", ()->c.requireAttackKey, v->c.requireAttackKey=v);
-        addToggle("Line of sight", ()->c.requireLineOfSight, v->c.requireLineOfSight=v);
-        addToggle("Critical-only", ()->c.criticalOnly, v->c.criticalOnly=v);
-        addToggle("Ignore invisible", ()->c.ignoreInvisible, v->c.ignoreInvisible=v);
-        addCycle("Preset", new String[]{"Legit","Balanced","Fast","Crits"}, ()->presetIndex, v->{ presetIndex=v; String[] p={"Legit","Balanced","Fast","Crits"}; c.resetTo(p[v]); });
+    private void buildTargets(int x, int y) {
+        toggle(x, y, "Oyuncular", c.players, v -> c.players = v);
+        toggle(x + 198, y, "Düşman yaratıklar", c.hostile, v -> c.hostile = v);
+        toggle(x, y + 30, "Pasif yaratıklar", c.passive, v -> c.passive = v);
+        toggle(x + 198, y + 30, "Nötr yaratıklar", c.neutral, v -> c.neutral = v);
+        toggle(x, y + 60, "Yaratıcı oyuncuları yoksay", c.ignoreCreativePlayers, v -> c.ignoreCreativePlayers = v);
+        toggle(x + 198, y + 60, "Görünmezleri yoksay", c.ignoreInvisible, v -> c.ignoreInvisible = v);
+        toggle(x, y + 90, "Ölü hedefleri yoksay", c.ignoreDead, v -> c.ignoreDead = v);
+        toggle(x + 198, y + 90, "Duvar arkasına vurma", c.requireLineOfSight, v -> c.requireLineOfSight = v);
+
+        addDrawableChild(new DoubleSlider(x, y + 140, 396, "Maksimum menzil", c.maxRange, 1, 6, 0.1,
+                value -> c.maxRange = value));
     }
 
-    private void buildTargets() {
-        TriggerConfig c=TriggerBotProClient.CONFIG;
-        addToggle("Players", ()->c.players, v->c.players=v);
-        addToggle("Hostile mobs", ()->c.hostile, v->c.hostile=v);
-        addToggle("Passive mobs", ()->c.passive, v->c.passive=v);
-        addToggle("Neutral mobs", ()->c.neutral, v->c.neutral=v);
-        addToggle("Ignore dead", ()->c.ignoreDead, v->c.ignoreDead=v);
-        addToggle("Ignore creative players", ()->c.ignoreCreativePlayers, v->c.ignoreCreativePlayers=v);
-        addRange("Range", c.maxRange, 2.0, 6.0, v->c.maxRange=v);
+    private void buildTiming(int x, int y) {
+        addDrawableChild(new DoubleSlider(x, y, 396, "Minimum CPS", c.minCps, 1, 20, 0.5,
+                value -> { c.minCps = value; if (c.maxCps < value) c.maxCps = value; }));
+        addDrawableChild(new DoubleSlider(x, y + 38, 396, "Maksimum CPS", c.maxCps, 1, 20, 0.5,
+                value -> c.maxCps = Math.max(c.minCps, value)));
+        addDrawableChild(new IntSlider(x, y + 76, 396, "Minimum tepki gecikmesi", c.reactionMinMs, 0, 1000, 5,
+                value -> { c.reactionMinMs = value; if (c.reactionMaxMs < value) c.reactionMaxMs = value; }));
+        addDrawableChild(new IntSlider(x, y + 114, 396, "Maksimum tepki gecikmesi", c.reactionMaxMs, 0, 1500, 5,
+                value -> c.reactionMaxMs = Math.max(c.reactionMinMs, value)));
+        addDrawableChild(new IntSlider(x, y + 152, 396, "Rastgele aralık (jitter)", c.jitterMs, 0, 80, 1,
+                value -> c.jitterMs = value));
+        toggle(x, y + 200, "Tepki gecikmesini rastgeleleştir", c.randomizeReaction, v -> c.randomizeReaction = v);
     }
 
-    private void buildTiming() {
-        TriggerConfig c=TriggerBotProClient.CONFIG;
-        addRange("Min CPS", c.minCps, 1, 20, v->c.minCps=Math.min(v,c.maxCps));
-        addRange("Max CPS", c.maxCps, 1, 20, v->c.maxCps=Math.max(v,c.minCps));
-        addToggle("Random reaction", ()->c.randomizeReaction, v->c.randomizeReaction=v);
-        addRangeInt("Min reaction (ms)", c.reactionMinMs, 0, 200, v->c.reactionMinMs=Math.min(v,c.reactionMaxMs));
-        addRangeInt("Max reaction (ms)", c.reactionMaxMs, 0, 200, v->c.reactionMaxMs=Math.max(v,c.reactionMinMs));
-        addToggle("Cooldown check", ()->c.attackOnlyIfCooldownReady, v->c.attackOnlyIfCooldownReady=v);
-        addToggle("Swing hand", ()->c.swingHand, v->c.swingHand=v);
+    private void buildVisual(int x, int y) {
+        toggle(x, y, "HUD göster", c.hudEnabled, v -> c.hudEnabled = v);
+        toggle(x + 198, y, "Hedef adını göster", c.hudShowTarget, v -> c.hudShowTarget = v);
+        toggle(x, y + 30, "Menzil bilgisini göster", c.hudShowRange, v -> c.hudShowRange = v);
+
+        addDrawableChild(ButtonWidget.builder(Text.literal("Sağ Shift = menü"), b -> {})
+                .dimensions(x, y + 78, 190, 24).build());
+        addDrawableChild(ButtonWidget.builder(Text.literal("G = aç / kapat"), b -> {})
+                .dimensions(x + 204, y + 78, 190, 24).build());
     }
 
-    private void addRange(String name,double value,double min,double max,java.util.function.DoubleConsumer set){
-        int y=y(); addDrawableChild(ButtonWidget.builder(Text.literal(String.format("%s: %.1f",name,value)), b->{ double step=(max-min)/10.0; double n=value+step; if(n>max)n=min; set.accept(Math.round(n*10)/10.0); rebuild(); }).dimensions(width/2-155,y,310,22).build());
-    }
-    private void addRangeInt(String name,int value,int min,int max,java.util.function.IntConsumer set){
-        int y=y(); addDrawableChild(ButtonWidget.builder(Text.literal(name+": "+value), b->{ int n=value+10; if(n>max)n=min; set.accept(n); rebuild(); }).dimensions(width/2-155,y,310,22).build());
+    private void toggle(int x, int y, String label, boolean value, java.util.function.Consumer<Boolean> setter) {
+        ButtonWidget button = ButtonWidget.builder(Text.literal(label + ": " + (value ? "AÇIK" : "KAPALI")), b -> {
+            boolean next = !valueFromButton(b, label);
+            setter.accept(next);
+            b.setMessage(Text.literal(label + ": " + (next ? "AÇIK" : "KAPALI")));
+            c.save();
+        }).dimensions(x, y, 190, 24).build();
+        addDrawableChild(button);
     }
 
-    @Override public void render(DrawContext ctx,int mouseX,int mouseY,float delta){
+    private boolean valueFromButton(ButtonWidget button, String label) {
+        String text = button.getMessage().getString();
+        return text.endsWith("AÇIK");
+    }
+
+    private void saveAndClose() {
+        c.clamp();
+        c.save();
+        close();
+    }
+
+    @Override public void close() {
+        client.setScreen(parent);
+    }
+
+    @Override public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
         renderBackground(ctx, mouseX, mouseY, delta);
-        ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("TriggerBot Pro"), width/2, 18, 0xFFFFFF);
-        ctx.drawCenteredTextWithShadow(textRenderer, Text.literal(page==0?"General":page==1?"Targets":"Timing"), width/2, 36, 0xAAAAAA);
-        super.render(ctx,mouseX,mouseY,delta);
+        int left = width / 2 - 210;
+        int right = width / 2 + 210;
+        ctx.fill(left, 0, right, height, 0xB80C0F14);
+        ctx.fill(left, 0, right, 2, 0xFF4ADE80);
+        ctx.drawText(textRenderer, "TRIGGERBOT PRO", left + 14, 4, 0xFFFFFFFF, true);
+        ctx.drawText(textRenderer, "Tek oyunculu • v2.0", right - 110, 4, 0xFF9CA3AF, false);
+        super.render(ctx, mouseX, mouseY, delta);
     }
 
-    @Override public void close(){ TriggerBotProClient.CONFIG.save(); client.setScreen(parent); }
+    private static final class DoubleSlider extends SliderWidget {
+        private final String name;
+        private final double min, max, step;
+        private final java.util.function.DoubleConsumer setter;
+
+        DoubleSlider(int x, int y, int width, String name, double value, double min, double max, double step,
+                     java.util.function.DoubleConsumer setter) {
+            super(x, y, width, 22, Text.literal(name), (value - min) / (max - min));
+            this.name = name; this.min = min; this.max = max; this.step = step; this.setter = setter;
+            updateMessage();
+        }
+
+        @Override protected void updateMessage() {
+            double v = min + value * (max - min);
+            v = Math.round(v / step) * step;
+            setMessage(Text.literal(name + ": " + String.format(java.util.Locale.US, "%.1f", v)));
+        }
+
+        @Override protected void applyValue() {
+            double v = min + value * (max - min);
+            v = Math.round(v / step) * step;
+            value = (v - min) / (max - min);
+            setter.accept(v);
+        }
+    }
+
+    private static final class IntSlider extends SliderWidget {
+        private final String name;
+        private final int min, max, step;
+        private final java.util.function.IntConsumer setter;
+
+        IntSlider(int x, int y, int width, String name, int value, int min, int max, int step,
+                  java.util.function.IntConsumer setter) {
+            super(x, y, width, 22, Text.literal(name), (value - min) / (double) (max - min));
+            this.name = name; this.min = min; this.max = max; this.step = step; this.setter = setter;
+            updateMessage();
+        }
+
+        @Override protected void updateMessage() {
+            int v = min + (int) Math.round(value * (max - min));
+            v = Math.round(v / (float) step) * step;
+            setMessage(Text.literal(name + ": " + v + " ms"));
+        }
+
+        @Override protected void applyValue() {
+            int v = min + (int) Math.round(value * (max - min));
+            v = Math.round(v / (float) step) * step;
+            value = (v - min) / (double) (max - min);
+            setter.accept(v);
+        }
+    }
 }

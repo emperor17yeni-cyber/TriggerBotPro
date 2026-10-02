@@ -1,0 +1,3 @@
+GitHub yükleme notu:
+Bu klasörün içeriğini repo köküne yükle.
+TriggerBotPro-GitHub klasörünü ayrıca üst klasör olarak yükleme.
