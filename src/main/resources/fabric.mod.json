@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "triggerbotpro",
+  "version": "${version}",
+  "name": "TriggerBot Pro",
+  "description": "Configurable singleplayer-only trigger bot for Minecraft 1.21 Fabric.",
+  "authors": ["Emperor"],
+  "environment": "client",
+  "entrypoints": {
+    "client": ["com.emperor.triggerbot.client.TriggerBotProClient"]
+  },
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "minecraft": "1.21.x",
+    "fabric-api": "*"
+  }
+}
