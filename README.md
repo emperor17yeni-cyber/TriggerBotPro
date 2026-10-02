@@ -9,6 +9,7 @@ Minecraft **1.21 + Fabric** için istemci tarafında çalışan, yalnızca **tek
 ### 🎯 TriggerBot
 - G tuşu ile aç / kapat
 - Sağ Shift ile ayarlar
+- H tuşu ile sıradaki profile geç
 - Hedefi görüş hizasında kontrol etme
 - Maksimum menzil: **1.0–6.0 blok**
 - Sadece tek oyunculu dünyalarda çalışma
@@ -29,7 +30,8 @@ Minecraft **1.21 + Fabric** için istemci tarafında çalışan, yalnızca **tek
 - Tepki gecikmesi min / max
 - Rastgele tepki gecikmesi
 - Jitter
-- Kritik vuruş modu
+- Kritik vuruş modu (düşerken, koşmadan, bekleme dolu; ilk uygun tick'te vurur)
+- Vuruş için bekleme doluluğu (%90–%100)
 
 ### 🛠️ Diğer ayarlar
 - Yalnızca kılıç / balta
@@ -41,11 +43,18 @@ Minecraft **1.21 + Fabric** için istemci tarafında çalışan, yalnızca **tek
 - Hedef mesafesi
 - Vuruş sayacı
 
-### 🎛️ Hazır profiller
-- **Yumuşak**
-- **Dengeli**
-- **Hızlı**
-- **Kritik**
+### 🎛️ Hazır profiller (menü → PROFİLLER, tek tıkla geçiş)
+- **Yumuşak**: rahat tempo, insansı gecikme
+- **Dengeli**: varsayılan
+- **Hızlı**: yüksek CPS, bekleme %90'da vurur
+- **Kritik**: sadece düşerken, pencere açılınca anında vurur
+- **Kritik Doğal**: kritik pencerede kısa insansı gecikmeyle vurur
+- **Savaşçı**: saldırı tuşu basılıyken, kılıç/balta ile
+- **Mob Avcısı**: sadece düşman mobları, oyunculara dokunmaz
+- **Hassas Yardım**: sen saldırı tuşuna basarken en doğru anda tetikler
+
+> Kritik için: zıpla (boşluk), koşma (sprint) ve düşerken vur. Minecraft koşarken kritik vermez.
+> Mod yalnızca tek oyunculu dünyalarda çalışır; çok oyunculu veya LAN'a açılmış dünyada kilitlenir.
 
 Ayarlar `.minecraft/config/triggerbotpro.json` dosyasına kaydedilir.
 
@@ -73,7 +82,6 @@ TriggerBotPro/
 │           └── fabric.mod.json
 ├── .gitattributes
 ├── .gitignore
-├── build.bat
 ├── build.gradle
 ├── build.sh
 ├── gradle.properties
@@ -94,7 +102,6 @@ src/
 .gitignore
 .gitattributes
 build.gradle
-build.bat
 build.sh
 gradle.properties
 settings.gradle
@@ -106,15 +113,7 @@ LICENSE
 
 ## 🔨 Yerel derleme
 
-### Windows
-
-Java 21 kurulu olmalı. Ardından:
-
-```text
-build.bat
-```
-
-### Linux / macOS
+### Linux / macOS / Git Bash
 
 ```bash
 chmod +x build.sh

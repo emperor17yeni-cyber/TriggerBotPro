@@ -7,17 +7,19 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
-import net.minecraft.client.gui.DrawContext;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.mob.HostileEntity;
 import net.minecraft.entity.mob.MobEntity;
 import net.minecraft.entity.passive.PassiveEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.AxeItem;
 import net.minecraft.item.SwordItem;
+import net.minecraft.text.Text;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.EntityHitResult;
 import org.lwjgl.glfw.GLFW;
@@ -28,11 +30,15 @@ public final class TriggerBotProClient implements ClientModInitializer {
     public static TriggerConfig CONFIG;
     private static KeyBinding openKey;
     private static KeyBinding toggleKey;
+    private static KeyBinding cycleKey;
     private static long reactionAt;
     private static long nextAttackAt;
     private static boolean pending;
     private static Entity currentTarget;
+    private static Entity lastTarget;
     private static int hitCount;
+    private static boolean critWindowOpen;
+    private static boolean singleplayerLocked;
 
     @Override
     public void onInitializeClient() {
@@ -45,6 +51,9 @@ public final class TriggerBotProClient implements ClientModInitializer {
         toggleKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.triggerbotpro.toggle", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_G,
                 "key.categories.triggerbotpro"));
+        cycleKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.triggerbotpro.cycle", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_H,
+                "key.categories.triggerbotpro"));
 
         ClientTickEvents.END_CLIENT_TICK.register(TriggerBotProClient::tick);
         HudRenderCallback.EVENT.register((drawContext, tickCounter) -> renderHud(drawContext));
@@ -53,9 +62,15 @@ public final class TriggerBotProClient implements ClientModInitializer {
     private static void tick(MinecraftClient client) {
         while (openKey.wasPressed()) client.setScreen(new TriggerConfigScreen(client.currentScreen));
         while (toggleKey.wasPressed()) toggle();
+        while (cycleKey.wasPressed()) cyclePreset(client);
 
         currentTarget = null;
+        critWindowOpen = false;
+        singleplayerLocked = false;
         if (client.player == null || client.world == null || client.interactionManager == null) return;
+
+        // Sadece tek oyunculu dünyada çalışır (LAN'a açılmış dünya da kilitli sayılır).
+        if (!client.isInSingleplayer()) { singleplayerLocked = true; resetState(); return; }
 
         if (!CONFIG.enabled || (CONFIG.requireAttackKey && !client.options.attackKey.isPressed())) { resetState(); return; }
         if (client.currentScreen != null) { resetState(); return; }
@@ -64,19 +79,31 @@ public final class TriggerBotProClient implements ClientModInitializer {
         if (CONFIG.weaponOnly && !isWeapon(client.player)) { resetState(); return; }
 
         Entity target = client.crosshairTarget instanceof EntityHitResult hit ? hit.getEntity() : null;
-        if (!validTarget(client, target)) { resetState(); return; }
+        if (!validTarget(client, target)) { lastTarget = null; resetState(); return; }
+        if (target != lastTarget) { lastTarget = target; resetState(); } // yeni hedef: tepki süresi baştan
         currentTarget = target;
 
-        if (CONFIG.attackOnlyIfCooldownReady && client.player.getAttackCooldownProgress(0.0f) < 1.0f) return;
-        if (CONFIG.criticalOnly && !isCriticalWindow(client.player)) return;
+        // Kritik modu: pencere dışındayken hiç vurma, pencere açılınca vur.
+        boolean critMode = CONFIG.criticalOnly;
+        if (critMode) {
+            critWindowOpen = isCriticalWindow(client.player);
+            if (!critWindowOpen) { pending = false; return; }
+        }
+
+        // Kritik vuruş için Minecraft bekleme çubuğunun >%90 olmasını ister; güvenli tarafta kal.
+        double needed = CONFIG.cooldownThreshold;
+        if (critMode) needed = Math.max(needed, 0.95);
+        if ((CONFIG.attackOnlyIfCooldownReady || critMode) && client.player.getAttackCooldownProgress(0.0f) < needed) return;
 
         long now = System.currentTimeMillis();
-        if (!pending) {
-            int delay = randomReaction();
-            reactionAt = now + delay;
-            pending = true;
+        boolean instant = critMode && CONFIG.critInstant;
+        if (!instant) {
+            if (!pending) {
+                reactionAt = now + randomReaction();
+                pending = true;
+            }
+            if (now < reactionAt || now < nextAttackAt) return;
         }
-        if (now < reactionAt || now < nextAttackAt) return;
 
         client.interactionManager.attackEntity(client.player, target);
         if (CONFIG.swingHand) client.player.swingHand(Hand.MAIN_HAND);
@@ -121,12 +148,20 @@ public final class TriggerBotProClient implements ClientModInitializer {
         return false;
     }
 
+    /**
+     * Minecraft'ın kritik vuruş koşulları: düşüyor olmak (zıpladıktan sonra tepeyi geçmiş),
+     * yerde/tırmanırken/suda/araçta/körlükte olmamak ve KOŞMAMAK. Koşarken vurursan kritik olmaz.
+     */
     private static boolean isCriticalWindow(PlayerEntity player) {
         return player.fallDistance > 0.0f
+                && player.getVelocity().y < 0.0
                 && !player.isOnGround()
                 && !player.isClimbing()
                 && !player.isTouchingWater()
-                && !player.hasVehicle();
+                && !player.isSprinting()
+                && !player.hasVehicle()
+                && !player.hasStatusEffect(StatusEffects.BLINDNESS)
+                && !player.getAbilities().flying;
     }
 
     private static void resetState() {
@@ -140,6 +175,17 @@ public final class TriggerBotProClient implements ClientModInitializer {
         CONFIG.save();
     }
 
+    private static void cyclePreset(MinecraftClient client) {
+        TriggerConfig.Preset[] all = TriggerConfig.Preset.values();
+        TriggerConfig.Preset current = CONFIG.currentPreset();
+        TriggerConfig.Preset next = all[current == null ? 0 : (current.ordinal() + 1) % all.length];
+        CONFIG.applyPreset(next);
+        resetState();
+        if (client.inGameHud != null) {
+            client.inGameHud.setOverlayMessage(Text.literal("TriggerBot Pro • Profil: " + next.label()), false);
+        }
+    }
+
     public static Entity getCurrentTarget() { return currentTarget; }
     public static int getHitCount() { return hitCount; }
 
@@ -150,12 +196,13 @@ public final class TriggerBotProClient implements ClientModInitializer {
         int x = 8;
         int y = 8;
         int width = 190;
-        int height = (CONFIG.hudShowTarget ? 56 : 24);
+        int height = (CONFIG.hudShowTarget ? 66 : 24);
+        int stateColor = singleplayerLocked ? 0xFFF59E0B : (CONFIG.enabled ? 0xFF4ADE80 : 0xFFEF4444);
+        String state = singleplayerLocked ? "KİLİTLİ" : (CONFIG.enabled ? "AKTİF" : "PASİF");
         ctx.fill(x, y, x + width, y + height, 0xCC101419);
-        ctx.fill(x, y, x + 3, y + height, CONFIG.enabled ? 0xFF4ADE80 : 0xFFEF4444);
+        ctx.fill(x, y, x + 3, y + height, stateColor);
         ctx.drawText(client.textRenderer, "TriggerBot Pro", x + 10, y + 5, 0xFFFFFFFF, true);
-        ctx.drawText(client.textRenderer, CONFIG.enabled ? "AKTİF" : "PASİF", x + 118, y + 5,
-                CONFIG.enabled ? 0xFF4ADE80 : 0xFFEF4444, true);
+        ctx.drawText(client.textRenderer, state, x + 118, y + 5, stateColor, true);
 
         if (CONFIG.hudShowTarget) {
             String target = currentTarget == null ? "Hedef: —" : "Hedef: " + currentTarget.getDisplayName().getString();
@@ -165,6 +212,13 @@ public final class TriggerBotProClient implements ClientModInitializer {
                 ctx.drawText(client.textRenderer, distance, x + 10, y + 35, 0xFF9CA3AF, false);
             }
             ctx.drawText(client.textRenderer, "Vuruş: " + hitCount, x + 106, y + 35, 0xFF9CA3AF, false);
+
+            String profile = singleplayerLocked ? "Sadece tek oyunculuda çalışır" : "Profil: " + CONFIG.presetLabel();
+            ctx.drawText(client.textRenderer, profile, x + 10, y + 50, 0xFF9CA3AF, false);
+            if (CONFIG.criticalOnly && !singleplayerLocked) {
+                ctx.drawText(client.textRenderer, critWindowOpen ? "KRİTİK" : "bekle", x + 134, y + 50,
+                        critWindowOpen ? 0xFF4ADE80 : 0xFF6B7280, true);
+            }
         }
     }
 }
