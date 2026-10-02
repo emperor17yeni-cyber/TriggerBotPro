@@ -62,9 +62,10 @@ public final class TriggerConfigScreen extends Screen {
         toggle(x + 198, y, "Sadece saldırı tuşu", c.requireAttackKey, v -> c.requireAttackKey = v);
         toggle(x, y + 30, "Eşya kullanırken dur", c.pauseWhileUsingItem, v -> c.pauseWhileUsingItem = v);
         toggle(x + 198, y + 30, "Sadece kılıç / balta", c.weaponOnly, v -> c.weaponOnly = v);
-        toggle(x, y + 60, "Saldırı bekleme süresi", c.attackOnlyIfCooldownReady, v -> c.attackOnlyIfCooldownReady = v);
+        toggle(x, y + 60, "CPS modu (bekleme yok)", c.cpsMode, v -> c.cpsMode = v);
         toggle(x + 198, y + 60, "Sprintte saldır", c.allowSprintAttack, v -> c.allowSprintAttack = v);
         toggle(x, y + 90, "El sallama animasyonu", c.swingHand, v -> c.swingHand = v);
+        toggle(x + 198, y + 90, "İnsan gibi davran", c.humanize, v -> c.humanize = v);
     }
 
     private void buildTargets(int x, int y) {
@@ -84,17 +85,20 @@ public final class TriggerConfigScreen extends Screen {
     private void buildTiming(int x, int y) {
         addDrawableChild(new DoubleSlider(x, y, 396, "Minimum CPS", c.minCps, 1, 20, 0.5, 1,
                 value -> { c.minCps = value; if (c.maxCps < value) c.maxCps = value; c.markCustom(); }));
-        addDrawableChild(new DoubleSlider(x, y + 34, 396, "Maksimum CPS", c.maxCps, 1, 20, 0.5, 1,
+        addDrawableChild(new DoubleSlider(x, y + 30, 396, "Maksimum CPS", c.maxCps, 1, 20, 0.5, 1,
                 value -> { c.maxCps = Math.max(c.minCps, value); c.markCustom(); }));
-        addDrawableChild(new IntSlider(x, y + 68, 396, "Minimum tepki gecikmesi", c.reactionMinMs, 0, 1000, 5,
+        addDrawableChild(new IntSlider(x, y + 60, 396, "Minimum tepki gecikmesi", c.reactionMinMs, 0, 1000, 5,
                 value -> { c.reactionMinMs = value; if (c.reactionMaxMs < value) c.reactionMaxMs = value; c.markCustom(); }));
-        addDrawableChild(new IntSlider(x, y + 102, 396, "Maksimum tepki gecikmesi", c.reactionMaxMs, 0, 1500, 5,
+        addDrawableChild(new IntSlider(x, y + 90, 396, "Maksimum tepki gecikmesi", c.reactionMaxMs, 0, 1500, 5,
                 value -> { c.reactionMaxMs = Math.max(c.reactionMinMs, value); c.markCustom(); }));
-        addDrawableChild(new IntSlider(x, y + 136, 396, "Rastgele aralık (jitter)", c.jitterMs, 0, 80, 1,
+        addDrawableChild(new IntSlider(x, y + 120, 396, "Rastgele aralık (jitter)", c.jitterMs, 0, 80, 1,
                 value -> { c.jitterMs = value; c.markCustom(); }));
-        addDrawableChild(new DoubleSlider(x, y + 170, 396, "Vuruş için bekleme doluluğu", c.cooldownThreshold, 0.90, 1.0, 0.01, 2,
+        addDrawableChild(new DoubleSlider(x, y + 150, 396, "Bekleme modunda doluluk", c.cooldownThreshold, 0.90, 1.0, 0.01, 2,
                 value -> { c.cooldownThreshold = value; c.markCustom(); }));
-        toggle(x, y + 204, "Tepki gecikmesini rastgeleleştir", c.randomizeReaction, v -> c.randomizeReaction = v);
+        toggle(x, y + 184, "CPS modu (bekleme yok)", c.cpsMode, v -> c.cpsMode = v);
+        toggle(x + 198, y + 184, "İnsan gibi davran", c.humanize, v -> c.humanize = v);
+        toggle(x, y + 214, "Havada düşüşü bekle", c.airborneWait, v -> c.airborneWait = v);
+        toggle(x + 198, y + 214, "Rastgele tepki gecikmesi", c.randomizeReaction, v -> c.randomizeReaction = v);
     }
 
     private void buildCritical(int x, int y) {
@@ -113,7 +117,7 @@ public final class TriggerConfigScreen extends Screen {
                     ? Text.literal("» " + preset.label()).formatted(Formatting.GREEN, Formatting.BOLD)
                     : Text.literal(preset.label());
             ButtonWidget button = ButtonWidget.builder(label, b -> { c.applyPreset(preset); rebuild(); })
-                    .dimensions(x + (i % 2) * 198, y + (i / 2) * 30, 190, 24)
+                    .dimensions(x + (i % 2) * 198, y + (i / 2) * 26, 190, 22)
                     .tooltip(Tooltip.of(Text.literal(preset.description())))
                     .build();
             addDrawableChild(button);
@@ -124,6 +128,7 @@ public final class TriggerConfigScreen extends Screen {
         plainToggle(x, y, "HUD göster", c.hudEnabled, v -> c.hudEnabled = v);
         plainToggle(x + 198, y, "Hedef adını göster", c.hudShowTarget, v -> c.hudShowTarget = v);
         plainToggle(x, y + 30, "Menzil bilgisini göster", c.hudShowRange, v -> c.hudShowRange = v);
+        plainToggle(x + 198, y + 30, "CPS sayacını göster", c.hudShowCps, v -> c.hudShowCps = v);
 
         addDrawableChild(ButtonWidget.builder(Text.literal("Sağ Shift = menü"), b -> {})
                 .dimensions(x, y + 78, 190, 24).build());
@@ -180,17 +185,17 @@ public final class TriggerConfigScreen extends Screen {
         ctx.fill(left, 0, right, height, 0xB80C0F14);
         ctx.fill(left, 0, right, 2, 0xFF4ADE80);
         ctx.drawText(textRenderer, "TRIGGERBOT PRO", left + 14, 4, 0xFFFFFFFF, true);
-        ctx.drawText(textRenderer, "Tek oyunculu • v2.1", right - 110, 4, 0xFF9CA3AF, false);
+        ctx.drawText(textRenderer, "Tek oyunculu • v2.2", right - 110, 4, 0xFF9CA3AF, false);
 
         int x = left + 14;
         int y = 42;
         if (tab == TAB_PROFILES) {
             TriggerConfig.Preset active = c.currentPreset();
-            ctx.drawText(textRenderer, "Aktif profil: " + c.presetLabel(), x, y + 128, 0xFF4ADE80, true);
+            ctx.drawText(textRenderer, "Aktif profil: " + c.presetLabel(), x, y + 136, 0xFF4ADE80, true);
             String desc = active == null ? "Ayarları elle değiştirdin. Bir profile tıklayınca hepsi tek seferde uygulanır."
                     : active.description();
-            ctx.drawText(textRenderer, desc, x, y + 142, 0xFFD1D5DB, false);
-            ctx.drawText(textRenderer, "İpucu: H tuşu oyun içinde sıradaki profile geçer.", x, y + 160, 0xFF9CA3AF, false);
+            ctx.drawText(textRenderer, desc, x, y + 150, 0xFFD1D5DB, false);
+            ctx.drawText(textRenderer, "İpucu: H tuşu oyun içinde sıradaki profile geçer.", x, y + 166, 0xFF9CA3AF, false);
         } else if (tab == TAB_CRIT) {
             int ty = y + 66;
             ctx.drawText(textRenderer, "Kritik vuruş için şunlar gerekir:", x, ty, 0xFF4ADE80, true);

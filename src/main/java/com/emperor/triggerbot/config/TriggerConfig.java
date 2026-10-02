@@ -18,8 +18,13 @@ public final class TriggerConfig {
     public boolean requireAttackKey = false;
     public boolean pauseWhileUsingItem = true;
     public boolean weaponOnly = false;
-    public boolean attackOnlyIfCooldownReady = true;
-    /** Vuruş için gereken bekleme doluluğu (1.0 = tam dolu, 0.9 = %90). */
+    /**
+     * CPS modu: silah bekleme çubuğu yok sayılır, tıklama hızı tamamen CPS ayarına göre olur.
+     * Kapalıyken (bekleme modu) bot ancak bekleme çubuğu dolunca vurur; kılıçta bu saniyede ~1,6 vuruştur,
+     * yani CPS ayarı devreye giremez.
+     */
+    public boolean cpsMode = false;
+    /** Bekleme modunda vuruş için gereken doluluk (1.0 = tam dolu, 0.9 = %90). */
     public double cooldownThreshold = 1.0;
 
     // Hedef
@@ -40,6 +45,10 @@ public final class TriggerConfig {
     public int reactionMaxMs = 90;
     public boolean randomizeReaction = true;
     public int jitterMs = 0;
+    /** İnsan gibi davran: ritim kayması, duraksamalar, ara sıra ıska, doğal tepki dağılımı. */
+    public boolean humanize = true;
+    /** Havadayken hâlâ yükseliyorsan vurma, düşüşü (kritik anını) bekle. */
+    public boolean airborneWait = false;
 
     // Kritik / vuruş
     public boolean criticalOnly = false;
@@ -52,6 +61,7 @@ public final class TriggerConfig {
     public boolean hudEnabled = true;
     public boolean hudShowTarget = true;
     public boolean hudShowRange = true;
+    public boolean hudShowCps = true;
 
     // Aktif profil (Preset adı, elle değişiklik yapılırsa "OZEL")
     public String activePreset = Preset.DENGELI.name();
@@ -88,7 +98,7 @@ public final class TriggerConfig {
         requireAttackKey = false;
         pauseWhileUsingItem = true;
         weaponOnly = false;
-        attackOnlyIfCooldownReady = true;
+        cpsMode = false;
         cooldownThreshold = 1.0;
         players = true;
         hostile = true;
@@ -101,6 +111,8 @@ public final class TriggerConfig {
         reactionMaxMs = 90;
         randomizeReaction = true;
         jitterMs = 0;
+        humanize = true;
+        airborneWait = false;
         criticalOnly = false;
         critInstant = true;
         allowSprintAttack = true;
@@ -118,6 +130,7 @@ public final class TriggerConfig {
         hudEnabled = true;
         hudShowTarget = true;
         hudShowRange = true;
+        hudShowCps = true;
         activePreset = Preset.DENGELI.name();
         clamp();
         save();
@@ -166,38 +179,45 @@ public final class TriggerConfig {
     }
 
     public enum Preset {
-        YUMUSAK("Yumuşak", "Rahat tempo, insansı gecikme.", c -> {
+        YUMUSAK("Yumuşak", "Rahat tempo, insansı gecikme. Bekleme modu.", c -> {
             c.maxRange = 3.6; c.minCps = 4.0; c.maxCps = 6.0;
             c.reactionMinMs = 110; c.reactionMaxMs = 180; c.jitterMs = 10;
         }),
-        DENGELI("Dengeli", "Günlük kullanım için varsayılan ayar.", c -> {
+        DENGELI("Dengeli", "Günlük kullanım. Bekleme modu, insan gibi.", c -> {
             c.maxRange = 4.0; c.minCps = 7.0; c.maxCps = 10.0;
             c.reactionMinMs = 45; c.reactionMaxMs = 90; c.jitterMs = 4;
         }),
-        HIZLI("Hızlı", "Yüksek tempo. Bekleme %90 dolunca vurur (hasar biraz düşer).", c -> {
+        HIZLI("Hızlı", "CPS modu: 10-14 CPS, bekleme çubuğu yok sayılır.", c -> {
             c.maxRange = 4.5; c.minCps = 10.0; c.maxCps = 14.0;
             c.reactionMinMs = 20; c.reactionMaxMs = 50; c.jitterMs = 2;
-            c.cooldownThreshold = 0.90;
+            c.cpsMode = true;
         }),
-        KRITIK("Kritik", "Sadece düşerken, pencere açıldığı ilk tick'te vurur.", c -> {
+        KRITIK("Kritik", "Sadece düşerken, pencere açıldığı ilk tick'te anında vurur.", c -> {
             c.maxRange = 4.0; c.minCps = 6.0; c.maxCps = 9.0;
             c.reactionMinMs = 55; c.reactionMaxMs = 100; c.jitterMs = 6;
-            c.criticalOnly = true; c.critInstant = true; c.weaponOnly = true;
+            c.criticalOnly = true; c.critInstant = true; c.weaponOnly = true; c.humanize = false;
         }),
         KRITIK_DOGAL("Kritik Doğal", "Kritik pencerede kısa insansı gecikmeyle vurur.", c -> {
             c.maxRange = 3.8; c.minCps = 6.0; c.maxCps = 9.0;
             c.reactionMinMs = 30; c.reactionMaxMs = 70; c.jitterMs = 6;
             c.criticalOnly = true; c.critInstant = false; c.weaponOnly = true;
         }),
+        NETPOT("NetPot", "1.9+ PvP gibi: bekleme dolunca vurur, havadaysa düşüşü bekler, insan gibi tepki verir.", c -> {
+            c.maxRange = 3.0; c.minCps = 5.0; c.maxCps = 7.0;
+            c.reactionMinMs = 140; c.reactionMaxMs = 230; c.jitterMs = 14;
+            c.weaponOnly = true; c.airborneWait = true;
+            c.pauseWhileUsingItem = true; c.allowSprintAttack = true;
+            c.cooldownThreshold = 1.0; c.humanize = true; c.cpsMode = false;
+        }),
         SAVASCI("Savaşçı", "Kılıç/balta ile, saldırı tuşu basılıyken oyuncu ve düşmanlara.", c -> {
             c.maxRange = 3.0; c.minCps = 8.0; c.maxCps = 11.0;
             c.reactionMinMs = 35; c.reactionMaxMs = 70; c.jitterMs = 5;
             c.requireAttackKey = true; c.weaponOnly = true;
         }),
-        MOB_AVCISI("Mob Avcısı", "Sadece düşman mobları keser, oyunculara dokunmaz.", c -> {
+        MOB_AVCISI("Mob Avcısı", "CPS modu: sadece düşman mobları keser, oyunculara dokunmaz.", c -> {
             c.maxRange = 4.5; c.minCps = 10.0; c.maxCps = 14.0;
             c.reactionMinMs = 15; c.reactionMaxMs = 40; c.jitterMs = 0;
-            c.cooldownThreshold = 0.95;
+            c.cpsMode = true; c.humanize = false;
             c.players = false; c.hostile = true; c.passive = false; c.neutral = false;
         }),
         HASSAS("Hassas Yardım", "Sen saldırı tuşuna basarken en doğru anda tetikler.", c -> {

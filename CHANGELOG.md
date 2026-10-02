@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.2.0
+
+- CPS düzeltmesi: bekleme çubuğu açıkken kılıç saniyede ~1,6 vuruştan fazla vuramadığı için CPS ayarı fiilen yok sayılıyordu. Yeni **CPS modu**: bekleme yok sayılır, hız tamamen CPS ayarına göre olur
+- Zamanlayıcı düzeltmesi: 50 ms'lik tick sınırı yüzünden gerçek hız hedefin altına düşüyordu (7–10 hedefi ~6,8 CPS veriyordu); artık hedef ortalamaya oturuyor
+- HUD'a gerçek **CPS sayacı** (son 1 saniyedeki tıklama sayısı) ve aktif mod (CPS / Bekleme) eklendi
+- Yeni profil: **NetPot** (1.9+ PvP tarzı: bekleme dolunca vurur, havadaysa düşüşü bekler, insan gibi tepki)
+- **İnsan gibi davran** seçeneği: ritim zamanla kayar, aralıklar düzgün değil doğal dağılır, arada kısa duraksama ve ara sıra ıska olur, tepki süresi ortada yoğunlaşır
+- **Havada düşüşü bekle** seçeneği: hâlâ yükseliyorsan vurmaz, düşüşte (kritik anında) vurur
+- Hedefle dövüşürken ilk temas tepkisi her vuruşta tekrarlanmaz
+- Mod hiçbir şey loglamaz, her tick'te sadece birkaç karşılaştırma yapar
+
 ## 2.1.0
 
 - Kritik vuruş zamanlaması yenilendi: yalnızca Minecraft'ın gerçek kritik koşulları sağlandığında (düşüyor, koşmuyor, yerde/suda/merdivende/körlükte değil) ve bekleme çubuğu en az %95 doluyken vurur

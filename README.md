@@ -26,10 +26,13 @@ Minecraft **1.21 + Fabric** için istemci tarafında çalışan, yalnızca **tek
 - Duvar arkasına saldırmama
 
 ### ⚡ Zamanlama
+- **CPS modu**: bekleme çubuğu yok sayılır, hız CPS ayarına göre olur; HUD'da gerçek CPS sayacı
 - Minimum / maksimum CPS
 - Tepki gecikmesi min / max
 - Rastgele tepki gecikmesi
 - Jitter
+- İnsan gibi davran (ritim kayması, duraksama, ara sıra ıska, doğal tepki)
+- Havada düşüşü bekle
 - Kritik vuruş modu (düşerken, koşmadan, bekleme dolu; ilk uygun tick'te vurur)
 - Vuruş için bekleme doluluğu (%90–%100)
 
@@ -46,11 +49,12 @@ Minecraft **1.21 + Fabric** için istemci tarafında çalışan, yalnızca **tek
 ### 🎛️ Hazır profiller (menü → PROFİLLER, tek tıkla geçiş)
 - **Yumuşak**: rahat tempo, insansı gecikme
 - **Dengeli**: varsayılan
-- **Hızlı**: yüksek CPS, bekleme %90'da vurur
+- **NetPot**: 1.9+ PvP tarzı, bekleme dolunca vurur, havadaysa düşüşü bekler, insan gibi
+- **Hızlı**: CPS modu, 10-14 CPS
 - **Kritik**: sadece düşerken, pencere açılınca anında vurur
 - **Kritik Doğal**: kritik pencerede kısa insansı gecikmeyle vurur
 - **Savaşçı**: saldırı tuşu basılıyken, kılıç/balta ile
-- **Mob Avcısı**: sadece düşman mobları, oyunculara dokunmaz
+- **Mob Avcısı**: CPS modu, sadece düşman mobları, oyunculara dokunmaz
 - **Hassas Yardım**: sen saldırı tuşuna basarken en doğru anda tetikler
 
 > Kritik için: zıpla (boşluk), koşma (sprint) ve düşerken vur. Minecraft koşarken kritik vermez.
@@ -123,7 +127,7 @@ chmod +x build.sh
 Çıktı:
 
 ```text
-build/libs/triggerbotpro-2.0.0.jar
+build/libs/triggerbotpro-2.2.0.jar
 ```
 
 ## 🤖 GitHub Actions
