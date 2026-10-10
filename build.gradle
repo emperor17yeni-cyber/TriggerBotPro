@@ -1,18 +1,20 @@
 plugins {
-    id 'fabric-loom' version '1.7.4'
+    id 'fabric-loom' version '1.6.10'
     id 'maven-publish'
+    id 'java'
 }
+
+sourceCompatibility = JavaVersion.VERSION_21
+targetCompatibility = JavaVersion.VERSION_21
 
 group = project.maven_group
 version = project.mod_version
-
-base {
-    archivesName = project.archives_base_name
-}
+archivesBaseName = project.archives_base_name
 
 repositories {
     mavenCentral()
-    maven { name = 'Fabric'; url = 'https://maven.fabricmc.net/' }
+    maven { url = 'https://maven.fabricmc.net/' }
+    maven { url = 'https://maven.minecraftforge.net/' }
 }
 
 dependencies {
@@ -22,34 +24,32 @@ dependencies {
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 }
 
-processResources {
-    inputs.property 'version', project.version
-    filesMatching('fabric.mod.json') {
-        expand 'version': project.version
+loom {
+    mixin {
+        defaultRefmapName = "versionbridge.refmap.json"
     }
-}
-
-tasks.withType(JavaCompile).configureEach {
-    it.options.release = 21
-    it.options.encoding = 'UTF-8'
 }
 
 java {
     withSourcesJar()
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = 21
 }
 
 jar {
-    from('LICENSE') {
-        rename { "${it}_${project.archives_base_name}" }
+    from("LICENSE") {
+        rename { "${it}_${project.archivesBaseName}" }
     }
 }
 
-publishing {
-    publications {
-        create('mavenJava', MavenPublication) {
-            from components.java
-        }
-    }
+sourcesJar {
+    from sourceSets.main.allSource
 }
+
+remapJar {
+    input.set(file("${buildDir}/libs/${archivesBaseName}-${version}-dev.jar"))
+}
+
+tasks.assemble.dependsOn remapJar
