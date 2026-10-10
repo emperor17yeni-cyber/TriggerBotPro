@@ -67,6 +67,14 @@ public class VersionBridgeModInitializer implements ModInitializer {
             false
         );
         source.sendFeedback(
+            () -> Text.literal("§b• 1.21.11§r (partial protocol support)"),
+            false
+        );
+        source.sendFeedback(
+            () -> Text.literal("§b• 1.26.3§r (partial protocol support)"),
+            false
+        );
+        source.sendFeedback(
             () -> Text.literal("§6§l⚠ Limitations:"),
             false
         );
@@ -82,7 +90,8 @@ public class VersionBridgeModInitializer implements ModInitializer {
     }
 
     private int versionSetCommand(ServerCommandSource source, String version) {
-        if (version.equals("1.21") || version.equals("1.21.1") || version.equals("1.21.4")) {
+        if (version.equals("1.21") || version.equals("1.21.1") || version.equals("1.21.4") || 
+            version.equals("1.21.11") || version.equals("1.26.3")) {
             VersionConfig.setTargetVersion(version);
             VersionConfig.save();
             source.sendFeedback(

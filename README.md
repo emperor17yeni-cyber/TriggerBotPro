@@ -8,7 +8,7 @@ Select target Minecraft server/protocol versions while running Minecraft 1.21.
 - **Configuration Persistence**: Saves chosen target version to `config/versionbridge/config.txt`
 - **Honest Version Support**:
   - ✅ 1.21 (native, fully supported)
-  - ⚠️ 1.21.1, 1.21.4 (listed, but **protocol translation NOT implemented** — see limitations)
+  - ⚠️ 1.21.1, 1.21.4, 1.21.11, 1.26.3 (listed, but **protocol translation NOT implemented** — see limitations)
 - **Clear Error Handling**: Gracefully rejects unsupported versions
 - **Server/Client Entry Points**: Separate initialization for server-side commands and client configuration
 
