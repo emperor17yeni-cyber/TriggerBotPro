@@ -48,8 +48,4 @@ sourcesJar {
     from sourceSets.main.allSource
 }
 
-remapJar {
-    input.set(file("${buildDir}/libs/${archivesBaseName}-${version}-dev.jar"))
-}
-
-tasks.assemble.dependsOn remapJar
+// Remapping is handled automatically by Loom
